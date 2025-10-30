@@ -1,0 +1,99 @@
+Analyzing query: ops/scripts/query1.sql
+                                                                              QUERY PLAN                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=110315.03..110326.69 rows=100 width=60) (actual time=843.378..858.993 rows=100 loops=1)
+   Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+   Buffers: shared hit=13439 read=34014, temp read=14399 written=14464
+   ->  Gather Merge  (cost=110315.03..202815.52 rows=792806 width=60) (actual time=813.668..829.277 rows=100 loops=1)
+         Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=13439 read=34014, temp read=14399 written=14464
+         ->  Sort  (cost=109315.00..110306.01 rows=396403 width=60) (actual time=792.459..792.464 rows=83 loops=3)
+               Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+               Sort Key: e.start_time
+               Sort Method: top-N heapsort  Memory: 47kB
+               Buffers: shared hit=13439 read=34014, temp read=14399 written=14464
+               Worker 0:  actual time=782.391..782.397 rows=100 loops=1
+                 Sort Method: top-N heapsort  Memory: 48kB
+                 JIT:
+                   Functions: 22
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.779 ms, Inlining 0.000 ms, Optimization 0.297 ms, Emission 5.886 ms, Total 6.963 ms
+                 Buffers: shared hit=4333 read=11229, temp read=4630 written=4836
+               Worker 1:  actual time=782.363..782.370 rows=100 loops=1
+                 Sort Method: top-N heapsort  Memory: 47kB
+                 JIT:
+                   Functions: 22
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.743 ms, Inlining 0.000 ms, Optimization 0.295 ms, Emission 6.872 ms, Total 7.909 ms
+                 Buffers: shared hit=4152 read=11494, temp read=5110 written=4868
+               ->  Parallel Hash Join  (cost=20981.57..94164.77 rows=396403 width=60) (actual time=599.445..749.267 rows=318588 loops=3)
+                     Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+                     Inner Unique: true
+                     Hash Cond: (b.user_id = u.id)
+                     Buffers: shared hit=13365 read=34014, temp read=14399 written=14464
+                     Worker 0:  actual time=591.578..738.789 rows=315181 loops=1
+                       Buffers: shared hit=4296 read=11229, temp read=4630 written=4836
+                     Worker 1:  actual time=591.655..739.295 rows=323978 loops=1
+                       Buffers: shared hit=4115 read=11494, temp read=5110 written=4868
+                     ->  Parallel Hash Join  (cost=16863.51..89006.13 rows=396403 width=49) (actual time=577.947..662.749 rows=318588 loops=3)
+                           Output: b.id, b.status, b.amount, b.user_id, e.name, e.start_time
+                           Inner Unique: true
+                           Hash Cond: (b.event_id = e.id)
+                           Buffers: shared hit=11834 read=34014, temp read=14399 written=14464
+                           Worker 0:  actual time=580.121..662.332 rows=315181 loops=1
+                             Buffers: shared hit=4087 read=11229, temp read=4630 written=4836
+                           Worker 1:  actual time=580.215..663.570 rows=323978 loops=1
+                             Buffers: shared hit=3926 read=11494, temp read=5110 written=4868
+                           ->  Parallel Seq Scan on public.bets b  (cost=0.00..58667.33 rows=663722 width=37) (actual time=0.512..447.203 rows=533221 loops=3)
+                                 Output: b.id, b.status, b.amount, b.user_id, b.event_id
+                                 Filter: (b.status = 'OPEN'::text)
+                                 Rows Removed by Filter: 800113
+                                 Buffers: shared hit=3820 read=34014
+                                 Worker 0:  actual time=0.459..447.437 rows=533640 loops=1
+                                   Buffers: shared hit=1379 read=11229
+                                 Worker 1:  actual time=0.596..445.855 rows=542002 loops=1
+                                   Buffers: shared hit=1315 read=11494
+                           ->  Parallel Hash  (cost=13014.00..13014.00 rows=199081 width=28) (actual time=48.217..48.218 rows=159407 loops=3)
+                                 Output: e.name, e.start_time, e.id
+                                 Buckets: 131072  Batches: 8  Memory Usage: 4800kB
+                                 Buffers: shared hit=8014, temp written=2696
+                                 Worker 0:  actual time=49.868..49.869 rows=161442 loops=1
+                                   Buffers: shared hit=2708, temp written=912
+                                 Worker 1:  actual time=49.956..49.956 rows=156036 loops=1
+                                   Buffers: shared hit=2611, temp written=880
+                                 ->  Parallel Seq Scan on public.events e  (cost=0.00..13014.00 rows=199081 width=28) (actual time=0.041..20.167 rows=159407 loops=3)
+                                       Output: e.name, e.start_time, e.id
+                                       Filter: (e.start_time > now())
+                                       Rows Removed by Filter: 107260
+                                       Buffers: shared hit=8014
+                                       Worker 0:  actual time=0.039..20.203 rows=161442 loops=1
+                                         Buffers: shared hit=2708
+                                       Worker 1:  actual time=0.037..20.410 rows=156036 loops=1
+                                         Buffers: shared hit=2611
+                     ->  Parallel Hash  (cost=2647.47..2647.47 rows=117647 width=19) (actual time=20.663..20.663 rows=66667 loops=3)
+                           Output: u.id, u.name
+                           Buckets: 262144  Batches: 1  Memory Usage: 13056kB
+                           Buffers: shared hit=1471
+                           Worker 0:  actual time=11.360..11.361 rows=24344 loops=1
+                             Buffers: shared hit=179
+                           Worker 1:  actual time=11.338..11.339 rows=21624 loops=1
+                             Buffers: shared hit=159
+                           ->  Parallel Seq Scan on public.users u  (cost=0.00..2647.47 rows=117647 width=19) (actual time=4.429..9.452 rows=66667 loops=3)
+                                 Output: u.id, u.name
+                                 Buffers: shared hit=1471
+                                 Worker 0:  actual time=6.141..7.827 rows=24344 loops=1
+                                   Buffers: shared hit=179
+                                 Worker 1:  actual time=7.124..8.615 rows=21624 loops=1
+                                   Buffers: shared hit=159
+ Planning:
+   Buffers: shared hit=284 read=10 dirtied=1
+ Planning Time: 4.877 ms
+ JIT:
+   Functions: 67
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 2.558 ms, Inlining 0.000 ms, Optimization 3.507 ms, Emission 39.631 ms, Total 45.696 ms
+ Execution Time: 1008.336 ms
+(94 rows)
+

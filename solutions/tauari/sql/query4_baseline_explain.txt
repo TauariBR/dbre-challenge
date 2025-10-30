@@ -1,0 +1,46 @@
+Analyzing query: ops/scripts/query4.sql
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize GroupAggregate  (cost=68006.86..68009.15 rows=4 width=15) (actual time=70.526..72.000 rows=0 loops=1)
+   Output: status, count(*)
+   Group Key: bets.status
+   Buffers: shared hit=3878 read=34030
+   ->  Gather Merge  (cost=68006.86..68009.07 rows=8 width=15) (actual time=70.525..71.999 rows=0 loops=1)
+         Output: status, (PARTIAL count(*))
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=3878 read=34030
+         ->  Partial GroupAggregate  (cost=67006.83..67008.12 rows=4 width=15) (actual time=68.128..68.129 rows=0 loops=3)
+               Output: status, PARTIAL count(*)
+               Group Key: bets.status
+               Buffers: shared hit=3878 read=34030
+               Worker 0:  actual time=66.955..66.956 rows=0 loops=1
+                 Buffers: shared hit=1351 read=12100
+               Worker 1:  actual time=67.116..67.117 rows=0 loops=1
+                 Buffers: shared hit=1185 read=12577
+               ->  Sort  (cost=67006.83..67007.25 rows=167 width=7) (actual time=68.127..68.128 rows=0 loops=3)
+                     Output: status
+                     Sort Key: bets.status
+                     Sort Method: quicksort  Memory: 25kB
+                     Buffers: shared hit=3878 read=34030
+                     Worker 0:  actual time=66.954..66.954 rows=0 loops=1
+                       Sort Method: quicksort  Memory: 25kB
+                       Buffers: shared hit=1351 read=12100
+                     Worker 1:  actual time=67.115..67.116 rows=0 loops=1
+                       Sort Method: quicksort  Memory: 25kB
+                       Buffers: shared hit=1185 read=12577
+                     ->  Parallel Seq Scan on public.bets  (cost=0.00..67000.67 rows=167 width=7) (actual time=68.075..68.076 rows=0 loops=3)
+                           Output: status
+                           Filter: (bets.placed_at >= (now() - '01:00:00'::interval))
+                           Rows Removed by Filter: 1333333
+                           Buffers: shared hit=3804 read=34030
+                           Worker 0:  actual time=66.880..66.881 rows=0 loops=1
+                             Buffers: shared hit=1314 read=12100
+                           Worker 1:  actual time=67.038..67.039 rows=0 loops=1
+                             Buffers: shared hit=1148 read=12577
+ Planning:
+   Buffers: shared hit=109
+ Planning Time: 0.218 ms
+ Execution Time: 72.039 ms
+(41 rows)
+

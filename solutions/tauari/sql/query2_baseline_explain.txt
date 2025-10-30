@@ -1,0 +1,58 @@
+Analyzing query: ops/scripts/query2.sql
+                                                                      QUERY PLAN                                                                       
+-------------------------------------------------------------------------------------------------------------------------------------------------------
+ Finalize GroupAggregate  (cost=102887.53..179838.91 rows=567646 width=83) (actual time=253.903..277.847 rows=4 loops=1)
+   Output: (date(placed_at)), status, count(*), sum(amount), avg(amount)
+   Group Key: bets.status, (date(bets.placed_at))
+   Buffers: shared hit=3884 read=34040, temp read=1977 written=1986
+   ->  Gather Merge  (cost=102887.53..163992.13 rows=473038 width=83) (actual time=250.936..277.809 rows=12 loops=1)
+         Output: (date(placed_at)), status, (PARTIAL count(*)), (PARTIAL sum(amount)), (PARTIAL avg(amount))
+         Workers Planned: 2
+         Workers Launched: 2
+         Buffers: shared hit=3884 read=34040, temp read=1977 written=1986
+         ->  Partial GroupAggregate  (cost=101887.51..108391.78 rows=236519 width=83) (actual time=208.943..235.851 rows=4 loops=3)
+               Output: (date(placed_at)), status, PARTIAL count(*), PARTIAL sum(amount), PARTIAL avg(amount)
+               Group Key: bets.status, (date(bets.placed_at))
+               Buffers: shared hit=3884 read=34040, temp read=1977 written=1986
+               Worker 0:  actual time=196.101..223.367 rows=4 loops=1
+                 JIT:
+                   Functions: 9
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.522 ms, Inlining 0.000 ms, Optimization 0.238 ms, Emission 4.230 ms, Total 4.991 ms
+                 Buffers: shared hit=1292 read=11007, temp read=638 written=641
+               Worker 1:  actual time=206.487..233.119 rows=4 loops=1
+                 JIT:
+                   Functions: 9
+                   Options: Inlining false, Optimization false, Expressions true, Deforming true
+                   Timing: Generation 0.502 ms, Inlining 0.000 ms, Optimization 0.215 ms, Emission 4.392 ms, Total 5.109 ms
+                 Buffers: shared hit=1253 read=11496, temp read=662 written=665
+               ->  Sort  (cost=101887.51..102478.80 rows=236519 width=17) (actual time=208.407..219.656 rows=190980 loops=3)
+                     Output: (date(placed_at)), status, amount
+                     Sort Key: bets.status, (date(bets.placed_at))
+                     Sort Method: external merge  Disk: 5416kB
+                     Buffers: shared hit=3884 read=34040, temp read=1977 written=1986
+                     Worker 0:  actual time=195.242..206.661 rows=184793 loops=1
+                       Sort Method: external merge  Disk: 5104kB
+                       Buffers: shared hit=1292 read=11007, temp read=638 written=641
+                     Worker 1:  actual time=206.109..217.214 rows=191886 loops=1
+                       Sort Method: external merge  Disk: 5296kB
+                       Buffers: shared hit=1253 read=11496, temp read=662 written=665
+                     ->  Parallel Seq Scan on public.bets  (cost=0.00..75925.30 rows=236519 width=17) (actual time=6.945..174.450 rows=190980 loops=3)
+                           Output: date(placed_at), status, amount
+                           Filter: ((bets.placed_at < CURRENT_DATE) AND (bets.placed_at >= (CURRENT_DATE - '1 day'::interval)))
+                           Rows Removed by Filter: 1142353
+                           Buffers: shared hit=3794 read=34040
+                           Worker 0:  actual time=4.462..163.229 rows=184793 loops=1
+                             Buffers: shared hit=1247 read=11007
+                           Worker 1:  actual time=4.608..172.466 rows=191886 loops=1
+                             Buffers: shared hit=1208 read=11496
+ Planning:
+   Buffers: shared hit=144 read=6 dirtied=1
+ Planning Time: 0.868 ms
+ JIT:
+   Functions: 30
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 1.732 ms, Inlining 0.000 ms, Optimization 0.762 ms, Emission 20.066 ms, Total 22.561 ms
+ Execution Time: 290.122 ms
+(53 rows)
+
