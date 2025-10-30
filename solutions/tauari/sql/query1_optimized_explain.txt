@@ -1,0 +1,39 @@
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.00..0.28 rows=100 width=60) (actual time=0.715..23.103 rows=100 loops=1)
+   Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+   Buffers: shared hit=325 read=92
+   ->  Nested Loop  (cost=0.00..2687.00 rows=943952 width=60) (actual time=0.714..23.089 rows=100 loops=1)
+         Output: u.id, u.name, b.id, b.status, b.amount, e.name, e.start_time
+         Inner Unique: true
+         Buffers: shared hit=325 read=92
+         ->  Nested Loop  (cost=0.00..2446.34 rows=943952 width=49) (actual time=0.693..22.332 rows=100 loops=1)
+               Output: b.id, b.status, b.amount, b.user_id, e.name, e.start_time
+               Buffers: shared hit=124 read=92
+               ->  Index Scan using idx_events_start_time on public.events e  (cost=0.00..1017.32 rows=474070 width=28) (actual time=0.472..12.636 rows=48 loops=1)
+                     Output: e.id, e.name, e.start_time, e.status, e.created_at
+                     Index Cond: (e.start_time > now())
+                     Buffers: shared hit=5 read=46
+               ->  Index Only Scan using idx_events_start_id_name on public.bets b  (cost=0.00..0.00 rows=2 width=37) (actual time=0.200..0.200 rows=2 loops=48)
+                     Output: b.event_id, b.user_id, b.status, b.amount, b.id
+                     Index Cond: (b.event_id = e.id)
+                     Heap Fetches: 0
+                     Buffers: shared hit=119 read=46
+         ->  Index Scan using idx_users_id_hash on public.users u  (cost=0.00..0.00 rows=1 width=19) (actual time=0.007..0.007 rows=1 loops=100)
+               Output: u.id, u.name, u.created_at
+               Index Cond: (u.id = b.user_id)
+               Buffers: shared hit=201
+ Planning:
+   Buffers: shared hit=432
+ Planning Time: 0.787 ms
+ Execution Time: 23.150 ms
+(27 rows)
+
