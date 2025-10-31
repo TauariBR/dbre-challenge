@@ -1,0 +1,18 @@
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+                                                       QUERY PLAN                                                        
+-------------------------------------------------------------------------------------------------------------------------
+ Seq Scan on public.mv_recent_bet_counts  (cost=0.00..1.11 rows=1070 width=40) (actual time=0.001..0.002 rows=0 loops=1)
+   Output: status, count
+ Planning:
+   Buffers: shared hit=63
+ Planning Time: 0.142 ms
+ Execution Time: 0.020 ms
+(6 rows)
+
