@@ -1,0 +1,28 @@
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+                                                                                           QUERY PLAN                                                                                           
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=114.25..114.25 rows=20 width=41) (actual time=2.270..2.272 rows=20 loops=1)
+   Output: user_id, user_name, bet_count, total_wagered, avg_bet
+   Buffers: shared hit=6760
+   ->  Sort  (cost=114.25..114.25 rows=6755 width=41) (actual time=2.268..2.269 rows=20 loops=1)
+         Output: user_id, user_name, bet_count, total_wagered, avg_bet
+         Sort Key: mv_user_daily_activity.total_wagered DESC
+         Sort Method: top-N heapsort  Memory: 28kB
+         Buffers: shared hit=6760
+         ->  Index Scan using mv_user_daily_activity_bet_date_user_id_idx on public.mv_user_daily_activity  (cost=0.00..114.17 rows=6755 width=41) (actual time=0.023..1.416 rows=6823 loops=1)
+               Output: user_id, user_name, bet_count, total_wagered, avg_bet
+               Index Cond: ((mv_user_daily_activity.bet_date >= (CURRENT_DATE - '1 day'::interval)) AND (mv_user_daily_activity.bet_date < CURRENT_DATE))
+               Buffers: shared hit=6757
+ Planning:
+   Buffers: shared hit=94
+ Planning Time: 0.255 ms
+ Execution Time: 2.293 ms
+(16 rows)
+
