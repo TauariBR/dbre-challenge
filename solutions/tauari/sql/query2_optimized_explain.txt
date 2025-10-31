@@ -1,0 +1,26 @@
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+SET
+                                                                QUERY PLAN                                                                
+------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=0.10..0.10 rows=4 width=42) (actual time=0.037..0.038 rows=4 loops=1)
+   Output: bet_date, status, bet_count, total_amount, avg_bet_size
+   Sort Key: mv_daily_settlement.status
+   Sort Method: quicksort  Memory: 25kB
+   Buffers: shared hit=4
+   ->  Seq Scan on public.mv_daily_settlement  (cost=0.00..0.10 rows=4 width=42) (actual time=0.012..0.015 rows=4 loops=1)
+         Output: bet_date, status, bet_count, total_amount, avg_bet_size
+         Filter: ((mv_daily_settlement.bet_date < CURRENT_DATE) AND (mv_daily_settlement.bet_date >= (CURRENT_DATE - '1 day'::interval)))
+         Rows Removed by Filter: 28
+         Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=106 dirtied=2
+ Planning Time: 0.420 ms
+ Execution Time: 0.060 ms
+(14 rows)
+

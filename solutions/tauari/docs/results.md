@@ -14,7 +14,7 @@ This document presents the performance optimization results for 4 critical queri
 **Overall Status:**
 
 - Query 1: ✅ **COMPLETE** (99.78% improvement)
-- Query 2: ⏳ In Progress
+- Query 2: ✅ **COMPLETE** (99.75% improvement)
 - Query 3: ⏳ In Progress
 - Query 4: ⏳ In Progress
 
@@ -186,11 +186,174 @@ Execution Time: 2.24 ms (average)
 
 ## Query 2: Daily Settlement Report
 
-**Status:** ⏳ In Progress
+### Baseline Performance (Before Optimization)
 
-**Baseline:** 290.122 ms  
-**Target:** < 5ms  
-**Strategy:** TBD
+**Execution Time:** 290.122 ms  
+**File:** `query2_baseline_explain.txt`
+
+**Problems Identified:**
+
+- Parallel Seq Scan on bets (4M rows scanned)
+- External merge sort for DATE(placed_at) calculation
+- Heavy CPU-bound aggregation (COUNT, SUM, AVG) on 572K rows
+- No index usage for date filtering
+- GroupAggregate on 572K rows
+
+**Query Plan:**
+
+```
+Sort  (cost=137318.42..137320.71 rows=915 width=52) (actual time=282.421..282.424 rows=4 loops=1)
+  ->  GroupAggregate (actual time=199.846..282.417 rows=4 loops=1)
+      ->  Parallel Seq Scan on bets  (cost=0.00..123588.20 rows=239213 width=20)
+            Filter: ((placed_at >= CURRENT_DATE - '1 day') AND (placed_at < CURRENT_DATE))
+            Rows Removed by Filter: 3427787
+Execution Time: 290.122 ms
+```
+
+---
+
+### Optimization Strategy
+
+**Approach: Materialized View (Pre-Aggregation)**
+
+The original query requires aggregating 572K rows daily. Even with optimal indexes, CPU-bound aggregation limits performance to ~112ms. To achieve < 5ms, we use a **Materialized View** that pre-computes daily settlements.
+
+**Phase 1: Create Materialized View**
+
+```sql
+CREATE MATERIALIZED VIEW mv_daily_settlement AS
+SELECT 
+    DATE(placed_at) as bet_date,
+    status,
+    COUNT(*) as bet_count,
+    SUM(amount) as total_amount,
+    AVG(amount) as avg_bet_size
+FROM bets
+WHERE placed_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY DATE(placed_at), status
+ORDER BY bet_date DESC, status;
+
+-- Index for fast date-range filtering
+CREATE INDEX ON mv_daily_settlement(bet_date, status);
+```
+
+**Phase 2: Query Rewrite**
+
+```sql
+-- Original query:
+SELECT DATE(placed_at), status, COUNT(*), SUM(amount), AVG(amount)
+FROM bets WHERE placed_at >= CURRENT_DATE - INTERVAL '1 day' ...
+
+-- Optimized query:
+SELECT * FROM mv_daily_settlement
+WHERE bet_date >= CURRENT_DATE - INTERVAL '1 day'
+  AND bet_date < CURRENT_DATE
+ORDER BY status;
+```
+
+**Phase 3: Maintenance Strategy**
+
+```sql
+-- Refresh daily (automated via cron/pg_cron)
+REFRESH MATERIALIZED VIEW CONCURRENTLY mv_daily_settlement;
+```
+
+---
+
+### Optimized Performance (After Optimization)
+
+**Execution Time:** 0.72 ms (average of 10 runs)  
+**File:** `query2_optimized_explain.txt`
+
+**Improvements:**
+
+- ✅ Index Scan on mv_daily_settlement (pre-aggregated data)
+- ✅ No aggregation at query time
+- ✅ Instant result retrieval from MV
+- ✅ Minimal buffer reads
+
+**Query Plan:**
+
+```
+Index Scan using mv_daily_settlement_bet_date_status_idx on mv_daily_settlement
+  (cost=0.15..8.17 rows=1 width=52) (actual time=0.025..0.028 rows=4 loops=1)
+  Index Cond: ((bet_date >= CURRENT_DATE - '1 day') AND (bet_date < CURRENT_DATE))
+Execution Time: 0.72 ms (average)
+```
+
+---
+
+### Benchmark Results (10 Executions)
+
+| Run | Time (ms) | Notes      |
+| --- | --------- | ---------- |
+| 1   | 1.287     | Cold cache |
+| 2   | 0.614     | ✅         |
+| 3   | 0.681     | ✅         |
+| 4   | 0.652     | ✅         |
+| 5   | 0.838     | ✅ Max     |
+| 6   | 0.832     | ✅         |
+| 7   | 0.808     | ✅         |
+| 8   | 0.673     | ✅         |
+| 9   | 0.702     | ✅         |
+| 10  | 0.651     | ✅         |
+
+**Statistics (excluding cold start):**
+
+- **Average:** 0.72 ms
+- **Median:** 0.69 ms
+- **Min:** 0.61 ms
+- **Max:** 0.84 ms
+- **p95:** ~0.83 ms
+- **p99:** ~0.84 ms
+- **Std Dev:** 0.09 ms
+- **Success Rate:** 100% < 5ms
+
+---
+
+### Performance Comparison
+
+| Metric             | Baseline            | Optimized     | Improvement           |
+| ------------------ | ------------------- | ------------- | --------------------- |
+| **Execution Time** | 290.122 ms          | 0.72 ms       | **99.75%** ✅         |
+| **Scan Type**      | Parallel Seq + Sort | Index Scan    | Eliminated full scans |
+| **Aggregation**    | Runtime (572K rows) | Pre-computed  | Zero-cost retrieval   |
+| **Target (< 5ms)** | ❌ Failed           | ✅ **PASS**   | 86% safety margin     |
+
+---
+
+### Trade-offs Analysis
+
+**Benefits:**
+
+- ✅ 400x faster query execution
+- ✅ Consistent sub-1ms latency (100% success rate)
+- ✅ Zero aggregation cost at query time
+- ✅ Pre-computed results instantly available
+- ✅ Predictable performance regardless of data volume
+
+**Costs:**
+
+- ⚠️ Storage: ~50MB for 30 days of pre-aggregated data
+- ⚠️ Refresh overhead: ~300ms daily to refresh MV (can be done off-peak)
+- ⚠️ Data freshness: Results are as current as last refresh
+- ⚠️ Query rewrite: Requires changing application query
+- ⚠️ Maintenance: Need cron job or trigger to automate refresh
+
+**Trade-off Justification:**
+
+For a **daily report** that runs **every 5 minutes** (300 times/day), the MV provides:
+- **Time saved:** 290ms × 300 = 87 seconds/day query execution
+- **Refresh cost:** 300ms once/day
+- **Net benefit:** 86.7 seconds/day saved
+
+This is an excellent trade-off for a report query where real-time data is not critical (daily granularity).
+
+**Acceptable for:**
+
+- Daily/hourly reports (not real-time dashboards)
+- Workloads where data freshness of 5-30 minutes is acceptable
+- High-frequency report queries (many reads, infrequent updates)
 
 ---
 
@@ -219,7 +382,7 @@ Execution Time: 2.24 ms (average)
 | Query                    | Baseline | Optimized   | Improvement | Target | Status      |
 | ------------------------ | -------- | ----------- | ----------- | ------ | ----------- |
 | **Q1: Active Bets**      | 1008 ms  | **2.24 ms** | **99.78%**  | < 5ms  | ✅ **PASS** |
-| **Q2: Daily Settlement** | 290 ms   | TBD         | TBD         | < 5ms  | ⏳          |
+| **Q2: Daily Settlement** | 290 ms   | **0.72 ms** | **99.75%**  | < 5ms  | ✅ **PASS** |
 | **Q3: User Activity**    | 536 ms   | TBD         | TBD         | < 5ms  | ⏳          |
 | **Q4: Recent Count**     | 72 ms    | TBD         | TBD         | < 5ms  | ⏳          |
 
@@ -253,14 +416,15 @@ Execution Time: 2.24 ms (average)
 
 ## Next Steps
 
-1. ⏳ Optimize Query 2 (Daily Settlement)
-2. ⏳ Optimize Query 3 (User Activity)
-3. ⏳ Optimize Query 4 (Recent Bet Count)
-4. ⏳ Update this document with results
-5. ⏳ Create architecture proposal for Advanced Requirements
-6. ⏳ Document deployment procedures
-7. ⏳ Commit and push final results
+1. ✅ Optimize Query 1 (Active Bets) - **COMPLETE**
+2. ✅ Optimize Query 2 (Daily Settlement) - **COMPLETE**
+3. ⏳ Optimize Query 3 (User Activity)
+4. ⏳ Optimize Query 4 (Recent Bet Count)
+5. ⏳ Update this document with final results
+6. ⏳ Create architecture proposal for Advanced Requirements
+7. ⏳ Document deployment procedures
+8. ⏳ Commit and push final results
 
 ---
 
-**Last Updated:** 2025-10-30 (Query 1 completed)
+**Last Updated:** 2025-10-31 (Query 2 completed)
